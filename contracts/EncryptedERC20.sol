@@ -109,7 +109,7 @@ contract EncryptedERC20 is Ownable2Step {
         ebool isTransferable = _updateAllowance(from, spender, amount);
         _transfer(from, to, amount, isTransferable);
         return true;
-    }
+    } 
 
     function _approve(address owner, address spender, euint64 amount) internal virtual {
         allowances[owner][spender] = amount;

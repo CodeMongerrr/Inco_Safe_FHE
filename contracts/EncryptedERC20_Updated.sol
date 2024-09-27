@@ -4,28 +4,25 @@ pragma solidity ^0.8.24;
 
 import "fhevm/lib/TFHE.sol";
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
+import "./TestAsyncDecrypt.sol";
 import "fhevm/gateway/GatewayCaller.sol";
 import {ERC20} from "./ERC20.sol"; 
 
-contract EncryptedERC20 is Ownable2Step {
+contract EncryptedERC20 is Ownable2Step, GatewayCaller {
     event Transfer(address indexed from, address indexed to);
     event Approval(address indexed owner, address indexed spender);
     event Mint(address indexed to, uint64 amount);
-
+    TestAsyncDecrypt public decrypt;
     ERC20 public originalToken;
     //The owner of the Contract 
     address internal contractOwner;
     uint64 private _totalSupply;
     mapping(address => euint64) internal balances;
     mapping(address => mapping(address => euint64)) internal allowances;
-
-
+    euint64 public xUint64;
+    uint64 public yUint64;
     constructor(address _erc20) Ownable(msg.sender){
         originalToken = ERC20(_erc20);
-    }
-
-    function make() public pure {
-
     }
 
     function totalSupply() public view virtual returns (uint64) {
@@ -129,13 +126,25 @@ contract EncryptedERC20 is Ownable2Step {
         _approve(owner, spender, TFHE.select(isTransferable, TFHE.sub(currentAllowance, amount), currentAllowance));
         return isTransferable;
     }
+    function gatewaySetup() internal {
+        TFHE.allow(xUint64, address(this));
+    }
+
+    function requestUint64() public {
+        uint256[] memory cts = new uint256[](1);
+        cts[0] = Gateway.toUint256(xUint64);
+        Gateway.requestDecryption(cts, this.callbackUint64.selector, 0, block.timestamp + 100, false);
+    }
+
+    function callbackUint64(uint256 , uint64 decryptedInput) public onlyGateway returns (uint64) {
+        yUint64 = decryptedInput;
+        return decryptedInput;
+    }
 
     function claim() public {
-    euint64 encryptedBalance = balances[msg.sender];
-    
-    // Decrypt the balance
-    uint64 amount = TFHE.decrypt(encryptedBalance);
-    
+    xUint64 = balances[msg.sender];
+    requestUint64();
+    uint64 amount = yUint64;
     // Ensure the contract has enough balance in the original token
     require(originalToken.balanceOf(address(this)) >= amount, "Insufficient contract balance");
     
@@ -143,7 +152,6 @@ contract EncryptedERC20 is Ownable2Step {
     require(originalToken.transfer(msg.sender, amount), "Transfer failed");
     
     // Reset the encrypted balance to zero
-    balances[msg.sender] = TFHE.asEuint64(0);
     
     // Allow the contract to modify the balance
     TFHE.allow(balances[msg.sender], address(this));
