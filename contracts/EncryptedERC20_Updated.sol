@@ -20,7 +20,14 @@ contract EncryptedERC20 is Ownable2Step, GatewayCaller {
     mapping(address => euint64) internal balances;
     mapping(address => mapping(address => euint64)) internal allowances;
     euint64 public xUint64;
+    euint32 public xUint32;
     uint64 public yUint64;
+    uint32 public yUint32;
+
+    struct Depositstruct{
+        address to;
+        euint32 encryptedAmount;
+    }
     constructor(address _erc20) Ownable(msg.sender){
         originalToken = ERC20(_erc20);
     }
@@ -141,21 +148,48 @@ contract EncryptedERC20 is Ownable2Step, GatewayCaller {
         return decryptedInput;
     }
 
+    function requestUint32() public {
+        uint256[] memory cts = new uint256[](1);
+        cts[0] = Gateway.toUint256(xUint32);
+        Gateway.requestDecryption(
+            cts,
+            this.callbackUint32.selector,
+            0,
+            block.timestamp + 100,
+            false
+        );
+    }
+
+    function callbackUint32(uint256, uint32 decryptedInput) public onlyGateway returns (uint32) {
+        yUint32 = decryptedInput;
+        return yUint32;
+
+    }
+
     function claim() public {
     xUint64 = balances[msg.sender];
     requestUint64();
     uint64 amount = yUint64;
-    // Ensure the contract has enough balance in the original token
     require(originalToken.balanceOf(address(this)) >= amount, "Insufficient contract balance");
-    
-    // Transfer the amount from the original token to the sender
     require(originalToken.transfer(msg.sender, amount), "Transfer failed");
-    
-    // Reset the encrypted balance to zero
-    
-    // Allow the contract to modify the balance
     TFHE.allow(balances[msg.sender], address(this));
     
     emit Transfer(address(this), msg.sender);
-}
+    }
+
+    function getAddress() public view returns (address) {
+        return address(this);
+    }
+
+    function wrapAndDistribute(uint256 amount, bytes memory depositData) public {
+        originalToken.transferFrom(msg.sender, address(this), amount);
+        Depositstruct[] memory data = abi.decode(depositData, (Depositstruct[]));
+        euint32 totalAmount;
+        for(uint i; i < data.length; i++) {
+            xUint32 = data[i].encryptedAmount;
+            requestUint32();
+            mintTo(data[i].to, yUint32);
+            totalAmount = TFHE.add(totalAmount, data[i].encryptedAmount);
+        }
+    }
 }
