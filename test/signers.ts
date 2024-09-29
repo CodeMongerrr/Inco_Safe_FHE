@@ -24,6 +24,13 @@ export const initSigners = async (): Promise<void> => {
   }
 };
 
-export const getSigners = async (): Promise<Signers> => {
-  return signers;
+export const getSigners = async (ethers: any): Promise<Signers> => {
+  const signers = await ethers.getSigners();
+  return {
+    alice: signers[0],
+    bob: signers[1],
+    carol: signers[2],
+    dave: signers[3],
+    eve: signers[4],
+  };
 };
