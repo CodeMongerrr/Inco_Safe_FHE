@@ -11,6 +11,9 @@ importers:
       extra-bigint:
         specifier: ^1.1.18
         version: 1.1.18
+      glob:
+        specifier: 7.2.0
+        version: 7.2.0
       sqlite3:
         specifier: ^5.1.7
         version: 5.1.7
