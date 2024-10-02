@@ -1,31 +1,36 @@
 import { ethers } from "hardhat";
 
-import type { Safe, ERC20, EncryptedERC20 } from "../../types";
+import type { EncryptedERC20, ERC20, Safe } from "../../types";
 import { getSigners } from "../signers";
+import { Address } from "hardhat-deploy/types";
 
-export async function deploySafe(owners: string[], threshold: number): Promise<Safe> {
+export async function deployEncryptedERC20Fixture(ERC20_Address: Address): Promise<EncryptedERC20> {
     const signers = await getSigners(ethers);
-    const contractFactory = await ethers.getContractFactory("Safe");
-    const contract = await contractFactory.connect(signers.alice).deploy(owners, threshold);
+
+    const contractFactory = await ethers.getContractFactory("EncryptedERC20");
+    const contract = await contractFactory.connect(signers.alice).deploy(ERC20_Address); // City of Zama's battle
     await contract.waitForDeployment();
-    // console.log("deploySafe -> " + await contract.getAddress());
+
     return contract;
 }
+
+
 export async function deployERC20(): Promise<ERC20> {
     const signers = await getSigners(ethers);
 
     const contractFactory = await ethers.getContractFactory("ERC20");
-    const contract = await contractFactory.connect(signers.alice).deploy();
+    const contract = await contractFactory.connect(signers.alice).deploy(); // City of Zama's battle
     await contract.waitForDeployment();
-    // console.log("deployERC20 -> " + await contract.getAddress());
     return contract;
 }
-export async function deployEncryptedERC20(ERC20Address: string): Promise<EncryptedERC20> {
+
+
+export async function deploySafe(owners: string[], threshold: number): Promise<Safe> {
     const signers = await getSigners(ethers);
 
-    const contractFactory = await ethers.getContractFactory("EncryptedERC20");
-    const contract = await contractFactory.connect(signers.alice).deploy(ERC20Address);
+    const contractFactory = await ethers.getContractFactory("Safe");
+    const contract = await contractFactory.connect(signers.alice).deploy(owners, threshold); // City of Zama's battle
     await contract.waitForDeployment();
-    // console.log("deployEncryptedERC20 -> " + await contract.getAddress());
+
     return contract;
 }
