@@ -90,23 +90,23 @@ describe("Safe", function () {
     console.log("ERC20 address: " + addressERC20);
     console.log("EncryptedERC20 address: " + addressEncryptedERC20);
 
-    let fhevmInstance = await createInstances(this.signers);
-    const tokenalice = fhevmInstance.alice.getPublicKey(addressEncryptedERC20) || {
-      signature: "",
-      publicKey: "",
-    };
-    const tokenbob = fhevmInstance.bob.getPublicKey(addressEncryptedERC20) || {
-      signature: "",
-      publicKey: "",
-    };
-    const tokencarol = fhevmInstance.carol.getPublicKey(addressEncryptedERC20) || {
-      signature: "",
-      publicKey: "",
-    };
-    const tokendave = fhevmInstance.dave.getPublicKey(addressEncryptedERC20) || {
-      signature: "",
-      publicKey: "",
-    };
+    // let fhevmInstance = await createInstances(this.signers);
+    // const tokenalice = fhevmInstance.alice.getPublicKey(addressEncryptedERC20) || {
+    //   signature: "",
+    //   publicKey: "",
+    // };
+    // const tokenbob = fhevmInstance.bob.getPublicKey(addressEncryptedERC20) || {
+    //   signature: "",
+    //   publicKey: "",
+    // };
+    // const tokencarol = fhevmInstance.carol.getPublicKey(addressEncryptedERC20) || {
+    //   signature: "",
+    //   publicKey: "",
+    // };
+    // const tokendave = fhevmInstance.dave.getPublicKey(addressEncryptedERC20) || {
+    //   signature: "",
+    //   publicKey: "",
+    // };
 
 
 
@@ -114,23 +114,180 @@ describe("Safe", function () {
       console.log("\n 3}  Providing Tokens to Safe Contract \n");
 
       try {
-        const txn = await erc20Contracts.mint(addressOwnerSafe, 1000);
+        const txn = await erc20Contracts.mint(addressOwnerSafe, 1000000);
         const t1 = await txn.wait();
         expect(t1?.status).to.eq(1);
-
-        const input = this.instances.alice.createEncryptedInput(this.contractAddress, this.signers.alice.address);
         console.log("Transasction Hash :", txn.hash);
         await txn.wait(1);
         console.log("Minting 1,000 tokens to Owner Safe Successfully");
+
       } catch (error) {
         console.log("Minting 1,000 tokens to Owner Safe Failed");
       }
+
       try {
+        let fnSelector = "0x095ea7b3";
 
+        let txnHash = await contractOwnerSafe.getTransactionHash(
+          addressERC20,
+          0,
+          fnSelector + AbiCoder.defaultAbiCoder().encode(["address", "uint256"], [addressEncryptedERC20, 1000000]).slice(2),
+          0,
+          1000,
+          0,
+          1000000,
+          addressOwnerSafe,
+          this.signers.alice.getAddress(),
+          await contractOwnerSafe.nonce()
+        )
+
+
+        console.log("The Transanction Hash generated for the Approve function", txnHash);
+
+        const txn1 = {
+          to: addressERC20,
+          value: 0,
+          data:
+            fnSelector +
+            AbiCoder.defaultAbiCoder().encode(["address", "uint256"], [addressEncryptedERC20, 1000000]).slice(2),
+          operation: 0,
+          safeTxGas: 1000000,
+          baseGas: 0,
+          gasPrice: 1000000,
+          gasToken: addressOwnerSafe,
+          refundReceiver: await this.signers.alice.getAddress(),
+          nonce: await contractOwnerSafe.nonce(),
+        };
+        const tx = buildSafeTransaction(txn1);
+        const signatureBytes = buildSignatureBytes([
+          await safeApproveHash(this.signers.alice, contractOwnerSafe, tx, true),
+        ]);
+
+        const txn = await contractOwnerSafe.execTransaction(
+          addressERC20,
+          0,
+          fnSelector +
+          AbiCoder.defaultAbiCoder().encode(["address", "uint256"], [addressEncryptedERC20, 1000000]).slice(2),
+          0,
+          1000000,
+          0,
+          1000000,
+          addressOwnerSafe,
+          this.signers.alice.getAddress(),
+          signatureBytes,
+          { gasLimit: 10000000 },
+        );
+
+        console.log("Transaction hash:", txn.hash);
+        await txn.wait(1);
+        console.log("Approval to EncryptedERC20 successful!");
       } catch (error) {
-
+        console.error("Approval to EncryptedERC20 failed:", error);
       }
 
+      console.log(
+        "Allowed no. of tokens: " + (await erc20Contracts.getallowance(addressOwnerSafe, addressEncryptedERC20)),
+      );
     }
+
+    console.log("\n 4} Deposit and distribute\n");
+    console.log("Distributing 10_000, 30_000, 960_000 tokens to Bob, Carol, Dave safes respectively\n");
+    let fnSelector = "0xf98aa085";
+
+    const amount = 1000000;
+    // const data1 = [addressBobSafe, fhevmInstance.alice.encrypt32(10000)];
+    // const data2 = [addressCarolSafe, fhevmInstance.alice.encrypt32(30000)];
+    // const data3 = [addressDaveSafe, fhevmInstance.alice.encrypt32(960000)];
+
+    const num1 = this.instances.alice.createEncryptedInput(this.contractAddress, this.signers.alice.address);
+    num1.add64(10000);
+
+    const num2 = this.instances.alice.createEncryptedInput(this.contractAddress, this.signers.alice.address);
+    num2.add64(30000);
+
+    const num3 = this.instances.alice.createEncryptedInput(this.contractAddress, this.signers.alice.address);
+    num3.add64(960000);
+    const encryptedAmount1 = num1.encrypt();
+    const encryptedAmount2 = num2.encrypt();
+    const encryptedAmount3 = num3.encrypt();
+
+    const data1 = [addressBobSafe, encryptedAmount1];
+    const data2 = [addressCarolSafe, encryptedAmount2];
+    const data3 = [addressDaveSafe, encryptedAmount3];
+    const depositData = [data1, data2, data3];
+
+
+    console.log("Deposit Data 1 :", data1);
+
+    // // Encode the data
+    console.log("First");
+    const abiCoder = AbiCoder.defaultAbiCoder();
+    console.log("Second");
+    const encodedData1 = abiCoder.encode(["tuple(address,bytes)[]"], [depositData]);
+    console.log("Third");
+    const encodedData2 = abiCoder.encode(["uint256", "bytes"], [amount, encodedData1]);
+
+
+    // let txnhash2 = await contractOwnerSafe.getTransactionHash(
+    //   addressEncryptedERC20,
+    //   0,
+    //   fnSelector + encodedData2.slice(2),
+    //   // "0xc6dad082",
+    //   0,
+    //   1000000,
+    //   0,
+    //   // 1000000,
+    //   0,
+    //   this.signers.alice.getAddress(),
+    //   addressOwnerSafe,
+    //   await contractOwnerSafe.nonce(),
+    // );
+
+
+    // const txn2 = {
+    //   to: addressEncryptedERC20,
+    //   value: 0,
+    //   data: fnSelector + encodedData2.slice(2),
+    //   operation: 0,
+    //   safeTxGas: 1000000,
+    //   baseGas: 0,
+    //   gasPrice: 0,
+    //   gasToken: await this.signers.alice.getAddress(),
+    //   refundReceiver: addressOwnerSafe,
+    //   nonce: await contractOwnerSafe.nonce(),
+    // };
+
+    const tx2 = buildSafeTransaction(txn2);
+    const signatureBytes2 = buildSignatureBytes([
+      await safeApproveHash(this.signers.alice, contractOwnerSafe, tx2, true),
+    ]);
+    // try {
+    //   // const txn = await contractOwnerSafe.setup([this.signers.alice.getAddress()], 0, this.signers.alice.getAddress(), "0x", this.signers.alice.getAddress(), this.signers.alice.getAddress(), 0, this.signers.alice.getAddress());
+    //   // const txn = await contractOwnerSafe.addOwnerWithThreshold(this.signers.alice.getAddress(), 1);
+    //   const txn = await contractOwnerSafe.execTransaction(
+    //     addressEncryptedERC20,
+    //     0,
+    //     fnSelector + encodedData2.slice(2),
+    //     // "0xc6dad082",
+    //     0,
+    //     1000000,
+    //     0,
+    //     // 1000000,
+    //     0,
+    //     this.signers.alice.getAddress(),
+    //     addressOwnerSafe,
+    //     signatureBytes2,
+    //     { gasLimit: 10000000 },
+    //   );
+    //   console.log("Transaction hash:", txn.hash);
+    //   await txn.wait(1);
+    //   console.log("Wrap and distribute to receiver safes successful!");
+    // } catch (error) {
+    //   console.error("Wrap and distribute to receiver safes failed:", error);
+    // }
+
+    // console.log(
+    //   "ERC20 tokens held by Encrypted20 contract: " + (await erc20Contracts.balanceOf(addressEncryptedERC20)) + "\n",
+    // );
   })
 });
